@@ -8,8 +8,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"github.com/gorilla/mux"
-
-
+	"strconv"
+	"strings"
+	"errors"
 )
 
 
@@ -34,6 +35,7 @@ func main() {
 	myRouter := mux.NewRouter().StrictSlash(true)
 
 	myRouter.HandleFunc("/",handleGetAll).Methods("GET")
+	myRouter.HandleFunc("/",handlePostFood).Methods("POST")
 
 	serveErr := http.ListenAndServe(":8080",myRouter)
 	if serveErr != nil{
@@ -50,6 +52,56 @@ func main() {
 func handleGetAll(w http.ResponseWriter, r *http.Request){
 	log.Println("Sending All")
 	json.NewEncoder(w).Encode(data)
+}
+
+// ought to come in as name, calorie count
+func handlePostFood(w http.ResponseWriter, r *http.Request){
+	// body,err := (*r).GetBody()
+	// if err != nil{
+	// 	log.Fatal(err)
+	// }
+	// var p []byte
+	// _, err = body.Read(p)
+	// if err != nil{
+	// 	log.Fatal(err)
+	// }
+	// defer body.Close()
+
+	// valid := json.Valid(r.Body)
+	// if !valid {
+	// 	log.Fatal("File does not contain valid json.\n")
+	// }
+	// var content string
+	var e string
+	var unmarshalErr *json.UnmarshalTypeError
+
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	err := decoder.Decode(&e)
+	if err != nil {
+		if errors.As(err, &unmarshalErr) {
+			errorResponse(w, "Bad Request. Wrong Type provided for field "+unmarshalErr.Field, http.StatusBadRequest)
+		} else {
+			errorResponse(w, "Bad Request "+err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+	// err = json.Unmarshal(r.Body, &content)
+
+	msg := strings.Split(e,",")
+	foodName := msg[0]
+	cal,err := strconv.Atoi(msg[1])
+	if err != nil{
+		log.Fatal(err)
+	}
+	f := food{
+		Name:foodName,
+		Calories:cal,
+	}
+	data[len(data)-1].Ate = append(data[len(data)-1].Ate,f)
+
+	errorResponse(w,"Success",http.StatusOK)
+	return
 }
 
 
@@ -117,4 +169,13 @@ func read(name string) ( error){
 	return  nil
 	// return nil,nil
 
+}
+
+func errorResponse(w http.ResponseWriter, message string, httpStatusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(httpStatusCode)
+	resp := make(map[string]string)
+	resp["message"] = message
+	jsonResp, _ := json.Marshal(resp)
+	w.Write(jsonResp)
 }
